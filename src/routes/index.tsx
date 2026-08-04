@@ -34,7 +34,7 @@ import { PropertyCard } from "@/components/site/property-card";
 import { Reveal, Counter } from "@/components/site/motion";
 import { properties, Property } from "@/lib/properties";
 import { SkyCityCanvas } from "@/components/3d/sky-city-canvas";
-import { CityHud } from "@/components/3d/city-hud";
+import { CityHud, WeatherMode } from "@/components/3d/city-hud";
 import { PropertyHotspotModal } from "@/components/3d/property-hotspot-modal";
 import { LenisProvider } from "@/components/site/lenis-provider";
 
@@ -107,26 +107,36 @@ const testimonials = [
 
 export function Index() {
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
-  const [dayNightMode, setDayNightMode] = useState<"day" | "night" | "auto">("day");
+  const [hoveredProperty, setHoveredProperty] = useState<Property | null>(null);
+  const [walkthroughProperty, setWalkthroughProperty] = useState<Property | null>(null);
+  const [weatherMode, setWeatherMode] = useState<WeatherMode>("sunny");
+  const [isArchitectMode, setIsArchitectMode] = useState(false);
 
   return (
     <LenisProvider>
       {({ scrollProgress, scrollToProgress }) => (
         <div className="relative min-h-screen bg-slate-950 text-slate-100 selection:bg-amber-400 selection:text-slate-950">
-          {/* 1. Fullscreen WebGL 3D Sky City Canvas */}
+          {/* 1. Fullscreen WebGL 3D Digital Twin City Canvas */}
           <SkyCityCanvas
             scrollProgress={scrollProgress}
-            dayNightMode={dayNightMode}
+            weatherMode={weatherMode}
+            isArchitectMode={isArchitectMode}
+            walkthroughProperty={walkthroughProperty}
             onSelectProperty={(prop) => setSelectedProperty(prop)}
+            onHoverProperty={(prop) => setHoveredProperty(prop)}
           />
 
-          {/* 2. Futuristic Real Estate HUD & Controls */}
+          {/* 2. Futuristic Digital Twin HUD & Architect Controls */}
           <CityHud
             scrollProgress={scrollProgress}
             onJumpToProgress={scrollToProgress}
             onSelectProperty={(prop) => setSelectedProperty(prop)}
-            dayNightMode={dayNightMode}
-            onChangeDayNightMode={setDayNightMode}
+            weatherMode={weatherMode}
+            onChangeWeatherMode={setWeatherMode}
+            isArchitectMode={isArchitectMode}
+            onToggleArchitectMode={() => setIsArchitectMode(!isArchitectMode)}
+            hoveredProperty={hoveredProperty}
+            onStartWalkthrough={(prop) => setWalkthroughProperty(prop)}
           />
 
           {/* 3. Floating Navigation Desk */}

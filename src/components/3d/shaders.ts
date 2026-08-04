@@ -8,12 +8,13 @@ export const GlassFacadeShader = {
     uTime: { value: 0 },
     uSunDirection: { value: new THREE.Vector3(0.5, 0.8, 0.3).normalize() },
     uSunColor: { value: new THREE.Color("#ffe8c4") },
-    uSkyColor: { value: new THREE.Color("#4a85c5") },
+    uSkyColor: { value: new THREE.Color("#1e3a8a") },
     uCloudColor: { value: new THREE.Color("#e0eaf5") },
-    uGlassColor: { value: new THREE.Color("#0d1b2a") },
+    uGlassColor: { value: new THREE.Color("#0b1329") },
     uSwayAmount: { value: 1.0 },
     uFresnelPower: { value: 2.5 },
     uNightFactor: { value: 0.0 }, // 0.0 Day -> 1.0 Night
+    uHovered: { value: 0.0 }, // 1.0 when hovered
   },
   vertexShader: /* glsl */ `
     uniform float uTime;
@@ -31,8 +32,8 @@ export const GlassFacadeShader = {
 
       // Height-based wind sway physics
       float heightFactor = max(0.0, pos.y);
-      float swayX = sin(uTime * 1.4 + pos.y * 0.1) * (heightFactor * 0.008) * uSwayAmount;
-      float swayZ = cos(uTime * 1.1 + pos.y * 0.08) * (heightFactor * 0.005) * uSwayAmount;
+      float swayX = sin(uTime * 1.4 + pos.y * 0.1) * (heightFactor * 0.006) * uSwayAmount;
+      float swayZ = cos(uTime * 1.1 + pos.y * 0.08) * (heightFactor * 0.004) * uSwayAmount;
       pos.x += swayX;
       pos.z += swayZ;
       vSwayFactor = length(vec2(swayX, swayZ));
@@ -55,6 +56,7 @@ export const GlassFacadeShader = {
     uniform vec3 uGlassColor;
     uniform float uFresnelPower;
     uniform float uNightFactor;
+    uniform float uHovered;
 
     varying vec3 vNormal;
     varying vec3 vWorldPosition;
@@ -71,8 +73,8 @@ export const GlassFacadeShader = {
 
       // Sun specular highlight
       vec3 reflectDir = reflect(-uSunDirection, normal);
-      float spec = pow(max(0.0, dot(viewDir, reflectDir)), 32.0);
-      vec3 specular = uSunColor * spec * (1.5 * (1.0 - uNightFactor * 0.8));
+      float spec = pow(max(0.0, dot(viewDir, reflectDir)), 48.0);
+      vec3 specular = uSunColor * spec * (1.2 * (1.0 - uNightFactor * 0.8));
 
       // Sky environmental reflection gradient
       float skyGradient = clamp(normal.y * 0.5 + 0.5, 0.0, 1.0);
@@ -85,7 +87,7 @@ export const GlassFacadeShader = {
       float windowBorder = step(0.12, windowUv.x) * step(0.12, 1.0 - windowUv.x) *
                            step(0.15, windowUv.y) * step(0.15, 1.0 - windowUv.y);
       
-      // Random window illumination pattern (more windows lit at night)
+      // Window illumination pattern
       float windowId = floor(vUv.x * 14.0) + floor(vUv.y * 45.0) * 14.0;
       float windowThreshold = mix(0.45, 0.15, uNightFactor);
       float windowOn = step(windowThreshold, sin(windowId * 13.578));
@@ -96,14 +98,60 @@ export const GlassFacadeShader = {
 
       // Base glass color + Fresnel + Specular + Window interior
       vec3 baseGlass = mix(uGlassColor, vec3(0.02, 0.05, 0.1), uNightFactor);
-      vec3 finalColor = mix(baseGlass, envReflect, fresnel * 0.75 + 0.2);
+      vec3 finalColor = mix(baseGlass, envReflect, fresnel * 0.65 + 0.15);
       finalColor += specular;
       finalColor += windowGlow;
 
-      // Subtle glow boost on swayed edges
-      finalColor += vec3(0.8, 0.7, 0.5) * vSwayFactor * 10.0;
+      // Hover Holographic Highlight Aura
+      if (uHovered > 0.5) {
+        finalColor += vec3(0.98, 0.75, 0.18) * (fresnel * 1.5 + 0.4);
+      }
 
-      gl_FragColor = vec4(finalColor, 0.9);
+      gl_FragColor = vec4(finalColor, 0.92);
+    }
+  `,
+};
+
+/**
+ * Exploded Architect Blueprint Grid Shader
+ */
+export const ArchitectBlueprintShader = {
+  uniforms: {
+    uTime: { value: 0 },
+    uColorGrid: { value: new THREE.Color("#38bdf8") },
+    uColorCore: { value: new THREE.Color("#fbbf24") },
+  },
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    varying vec3 vNormal;
+    varying vec3 vPosition;
+
+    void main() {
+      vUv = uv;
+      vNormal = normalize(normalMatrix * normal);
+      vPosition = position;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: /* glsl */ `
+    uniform float uTime;
+    uniform vec3 uColorGrid;
+    uniform vec3 uColorCore;
+
+    varying vec2 vUv;
+    varying vec3 vNormal;
+    varying vec3 vPosition;
+
+    void main() {
+      vec2 grid = abs(fract(vUv * 20.0 - 0.5) - 0.5) / fwidth(vUv * 20.0);
+      float line = min(grid.x, grid.y);
+      float gridPattern = 1.0 - min(line, 1.0);
+
+      float edge = pow(1.0 - abs(dot(vNormal, vec3(0.0, 0.0, 1.0))), 2.0);
+      vec3 col = mix(uColorGrid, uColorCore, sin(vPosition.y * 0.1 + uTime * 2.0) * 0.5 + 0.5);
+      col *= (gridPattern * 1.5 + edge * 2.0 + 0.3);
+
+      gl_FragColor = vec4(col, 0.85);
     }
   `,
 };
@@ -118,10 +166,12 @@ export const WaterGLSLShader = {
     uSunDirection: { value: new THREE.Vector3(0.5, 0.8, 0.3).normalize() },
     uSunColor: { value: new THREE.Color("#ffe8c4") },
     uNightFactor: { value: 0.0 },
+    uWeather: { value: 0 }, // 0: sunny, 1: rain, 2: fog
   },
   vertexShader: /* glsl */ `
     uniform float uTime;
     uniform vec2 uMouse;
+    uniform int uWeather;
     
     varying vec2 vUv;
     varying vec3 vWorldPosition;
@@ -132,7 +182,7 @@ export const WaterGLSLShader = {
       vUv = uv;
       vec3 pos = position;
 
-      // Compound Sine Waves for realistic water surface displacement
+      // Compound Sine Waves
       float w1 = sin(pos.x * 0.05 + uTime * 1.5) * 0.8;
       float w2 = cos(pos.z * 0.04 + uTime * 1.2) * 0.7;
       float w3 = sin((pos.x + pos.z) * 0.08 + uTime * 2.0) * 0.4;
@@ -142,13 +192,19 @@ export const WaterGLSLShader = {
       float distToMouse = length(pos.xz - mouseWorld);
       float mouseRipple = sin(distToMouse * 0.1 - uTime * 4.0) * exp(-distToMouse * 0.015) * 1.2;
 
-      pos.y += w1 + w2 + w3 + mouseRipple;
+      // Rain drop ripples
+      float rainRipple = 0.0;
+      if (uWeather == 1) {
+        float r1 = sin(pos.x * 0.8 + uTime * 8.0) * cos(pos.z * 0.8 + uTime * 8.0) * 0.3;
+        rainRipple = r1;
+      }
+
+      pos.y += w1 + w2 + w3 + mouseRipple + rainRipple;
       vWave = pos.y;
 
       vec4 worldPos = modelMatrix * vec4(pos, 1.0);
       vWorldPosition = worldPos.xyz;
 
-      // Compute wave normal approximation
       vec3 n = vec3(
         -cos(pos.x * 0.05 + uTime * 1.5) * 0.04,
         1.0,
@@ -174,10 +230,8 @@ export const WaterGLSLShader = {
       vec3 viewDir = normalize(cameraPosition - vWorldPosition);
       vec3 normal = normalize(vNormal);
 
-      // Fresnel reflection factor for water surface
       float fresnel = pow(1.0 - max(0.0, dot(normal, viewDir)), 3.0);
 
-      // Water colors: Deep turquoise day -> Deep bioluminescent navy night
       vec3 waterDeepDay = vec3(0.02, 0.12, 0.24);
       vec3 waterShallowDay = vec3(0.05, 0.35, 0.45);
       vec3 waterDeepNight = vec3(0.01, 0.03, 0.08);
@@ -188,20 +242,17 @@ export const WaterGLSLShader = {
 
       vec3 baseWater = mix(waterDeep, waterShallow, smoothstep(-1.0, 1.0, vWave));
 
-      // Sun Specular Sparkles on water crests
       vec3 reflectDir = reflect(-uSunDirection, normal);
       float spec = pow(max(0.0, dot(viewDir, reflectDir)), 64.0);
-      vec3 specular = uSunColor * spec * (2.5 * (1.0 - uNightFactor * 0.85));
+      vec3 specular = uSunColor * spec * (2.0 * (1.0 - uNightFactor * 0.85));
 
-      // Sky environmental reflection on water
-      vec3 skyReflectDay = vec3(0.4, 0.65, 0.9);
+      vec3 skyReflectDay = vec3(0.3, 0.55, 0.85);
       vec3 skyReflectNight = vec3(0.05, 0.1, 0.25);
       vec3 skyReflect = mix(skyReflectDay, skyReflectNight, uNightFactor);
 
       vec3 finalWater = mix(baseWater, skyReflect, fresnel * 0.7);
       finalWater += specular;
 
-      // Subtle water crest foam/glow
       float foam = smoothstep(1.0, 1.8, vWave);
       finalWater += vec3(0.8, 0.95, 1.0) * foam * 0.4;
 
@@ -231,7 +282,6 @@ export const DayNightSkyShader = {
     uniform float uNightFactor;
     varying vec3 vWorldPosition;
 
-    // Pseudo-random star noise
     float hash(vec3 p) {
       return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
     }
@@ -240,27 +290,23 @@ export const DayNightSkyShader = {
       vec3 nPos = normalize(vWorldPosition);
       float h = nPos.y;
 
-      // Day Sky Gradient (Golden Hour Sunset)
       vec3 dayTop = vec3(0.05, 0.15, 0.35);
-      vec3 dayBottom = vec3(0.2, 0.45, 0.75);
-      vec3 dayHorizon = vec3(0.95, 0.65, 0.35);
+      vec3 dayBottom = vec3(0.15, 0.35, 0.65);
+      vec3 dayHorizon = vec3(0.9, 0.6, 0.35);
       vec3 daySky = mix(dayBottom, dayTop, max(0.0, h));
       daySky = mix(dayHorizon, daySky, smoothstep(-0.1, 0.4, h));
 
-      // Night Sky Gradient (Deep Space Blue)
       vec3 nightTop = vec3(0.01, 0.02, 0.06);
       vec3 nightBottom = vec3(0.03, 0.06, 0.14);
       vec3 nightHorizon = vec3(0.08, 0.12, 0.25);
       vec3 nightSky = mix(nightBottom, nightTop, max(0.0, h));
       nightSky = mix(nightHorizon, nightSky, smoothstep(-0.1, 0.4, h));
 
-      // Stars in night sky
       float starVal = step(0.994, hash(floor(nPos * 400.0)));
       vec3 stars = vec3(starVal) * uNightFactor * step(0.05, h);
 
       vec3 finalSky = mix(daySky, nightSky, uNightFactor) + stars;
 
-      // Sun Disk (Golden Day) / Moon Disk (Night)
       vec3 sunDir = normalize(uSunPos);
       float sunDot = max(0.0, dot(nPos, sunDir));
       vec3 sunGlow = vec3(1.0, 0.85, 0.5) * pow(sunDot, 64.0) * (2.0 * (1.0 - uNightFactor));
@@ -289,7 +335,7 @@ export const TrafficShader = {
     void main() {
       vUv = uv;
       vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-      gl_Position = projectionMatrix * mvPosition;
+      gl_Position = projectionMatrix * viewMatrix * mvPosition;
     }
   `,
   fragmentShader: /* glsl */ `
