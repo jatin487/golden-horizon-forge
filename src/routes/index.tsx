@@ -107,6 +107,7 @@ const testimonials = [
 
 export function Index() {
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
+  const [dayNightMode, setDayNightMode] = useState<"day" | "night" | "auto">("day");
 
   return (
     <LenisProvider>
@@ -115,14 +116,17 @@ export function Index() {
           {/* 1. Fullscreen WebGL 3D Sky City Canvas */}
           <SkyCityCanvas
             scrollProgress={scrollProgress}
+            dayNightMode={dayNightMode}
             onSelectProperty={(prop) => setSelectedProperty(prop)}
           />
 
-          {/* 2. Futuristic Flight Telemetry HUD */}
+          {/* 2. Futuristic Real Estate HUD & Controls */}
           <CityHud
             scrollProgress={scrollProgress}
             onJumpToProgress={scrollToProgress}
             onSelectProperty={(prop) => setSelectedProperty(prop)}
+            dayNightMode={dayNightMode}
+            onChangeDayNightMode={setDayNightMode}
           />
 
           {/* 3. Floating Navigation Desk */}
